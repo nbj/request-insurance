@@ -1,6 +1,6 @@
 {
-    "name": "nbj/request-insurance",
-    "description": "Package that facilitates and ensures that http requests are sent",
+    "name": "cego/request-insurance",
+    "description": "Package for Laravel that facilitates and ensures that http requests are sent",
     "type": "project",
     "license": "MIT",
     "minimum-stability": "dev",
@@ -12,21 +12,31 @@
         }
     ],
     "require": {
-        "illuminate/support": "^7.0",
-        "nbj/stopwatch": "^0.0.5"
+        "php": "^7.3",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "nesbot/carbon": "^2.17",
+        "nbj/stopwatch": "^0.0.5",
+        "illuminate/view": "^7.0|^8.0",
+        "illuminate/http": "^7.0|^8.0",
+        "illuminate/routing": "^7.0|^8.0",
+        "illuminate/support": "^7.0|^8.0",
+        "illuminate/console": "^7.0|^8.0",
+        "illuminate/database": "^7.0|^8.0",
+        "illuminate/pagination": "^7.0|^8.0"
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "*"
     },
     "autoload": {
         "psr-4": {
-            "Nbj\\": "src/"
+            "Cego\\": "src/"
         }
     },
     "extra": {
         "laravel": {
             "providers": [
-                "Nbj\\RequestInsurance\\RequestInsuranceServiceProvider"
+                "Cego\\RequestInsurance\\RequestInsuranceServiceProvider"
             ]
         }
     }
