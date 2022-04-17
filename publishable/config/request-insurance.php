@@ -26,7 +26,7 @@ return [
     | Sets the timeout for a curl request, this is the time execute() has to complete the requests
     */
 
-    'timeoutInSeconds' => 5,
+    'timeoutInSeconds' => 20,
 
 
     /*
@@ -42,6 +42,17 @@ return [
 
     'maximumNumberOfRetries' => 10,
 
+    /*
+    | The number of days to keep completed rows, before deletion
+    */
+
+    'cleanUpKeepDays' => 14,
+
+    /*
+    | The number of rows to chunk delete between slight delays, if you experience OOM errors, then reduce this number.
+    */
+
+    'cleanChunkSize' => 1000,
 
     /*
     | Set the number of requests in each batch
@@ -54,5 +65,28 @@ return [
      | Set the concrete implementation for HttpRequest
      */
 
-    'httpRequestClass' => env('REQUEST_INSURANCE_HTTP_REQUEST_CLASS', \Nbj\RequestInsurance\CurlRequest::class)
+    'httpRequestClass' => env('REQUEST_INSURANCE_HTTP_REQUEST_CLASS', \Cego\RequestInsurance\CurlRequest::class),
+
+
+    /*
+    | Sets if load should be condensed to a value between 0 and 1, and have values above 1 being overload
+    | if false value will accumulate from all running instances. E.g. 3 instances will give a value
+    | between 0 and 3 for normal load, and above for overload
+    */
+
+    'condenseLoad' => env('REQUEST_INSURANCE_CONDENSE_LOAD', true),
+
+    /*
+    | Sets the fields which should always be encrypted.
+    */
+
+    'fieldsToAutoEncrypt' => [
+        'headers' => ['Authorization', 'authorization']
+    ],
+
+    /*
+     | Sets the table name to look for request insurances
+     */
+    'table'        => null,
+    'table_logs'   => null,
 ];

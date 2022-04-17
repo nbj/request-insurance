@@ -1,10 +1,10 @@
 <?php
 
-namespace Nbj\RequestInsurance;
+namespace Cego\RequestInsurance;
 
 use Illuminate\Support\Collection;
-use Nbj\RequestInsurance\Contracts\HttpRequest;
-use Nbj\RequestInsurance\Contracts\ContainsResponseHeaders;
+use Cego\RequestInsurance\Contracts\HttpRequest;
+use Cego\RequestInsurance\Contracts\ContainsResponseHeaders;
 
 class HttpResponse
 {
@@ -96,7 +96,7 @@ class HttpResponse
      */
     public function wasSuccessful()
     {
-        return $this->getCode() == 200;
+        return $this->isResponseCodeBetween(200, 299);
     }
 
     /**
@@ -116,7 +116,7 @@ class HttpResponse
      */
     public function isNotRetryable()
     {
-        return $this->getCode() >= 400 && $this->getCode() < 500;
+        return $this->isResponseCodeBetween(400, 499);
     }
 
     /**
@@ -165,5 +165,42 @@ class HttpResponse
     public function getExecutionTime()
     {
         return (float) $this->info->get('total_time');
+    }
+
+    /**
+     * Returns true if the response was a client error
+     *
+     * Code range [400;499]
+     *
+     * @return bool
+     */
+    public function isClientError(): bool
+    {
+        return $this->isResponseCodeBetween(400, 499);
+    }
+
+    /**
+     * Returns true if the response was a server error
+     *
+     * Code range [500;599]
+     *
+     * @return bool
+     */
+    public function isServerError(): bool
+    {
+        return $this->isResponseCodeBetween(500, 599);
+    }
+
+    /**
+     * Checks if the response code is between a given range INCLUSIVE in both ends
+     *
+     * @param int $start
+     * @param int $end
+     *
+     * @return bool
+     */
+    protected function isResponseCodeBetween(int $start, int $end): bool
+    {
+        return $start <= $this->getCode() && $this->getCode() <= $end;
     }
 }

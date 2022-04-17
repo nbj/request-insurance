@@ -1,11 +1,11 @@
 <?php
 
-namespace Nbj\RequestInsurance\ViewComponents;
+namespace Cego\RequestInsurance\ViewComponents;
 
-use App\RequestInsurance;
 use Illuminate\View\View;
 use Illuminate\View\Component;
 use Illuminate\Contracts\View\Factory;
+use Cego\RequestInsurance\Models\RequestInsurance;
 
 class Status extends Component
 {

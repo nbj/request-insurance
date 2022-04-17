@@ -1,9 +1,10 @@
 <?php
 
-namespace Nbj\RequestInsurance\Contracts;
+namespace Cego\RequestInsurance\Contracts;
 
-use Nbj\RequestInsurance\HttpResponse;
-use Nbj\RequestInsurance\Exceptions\MethodNotAllowedForRequestInsurance;
+use Illuminate\Support\Facades\Config;
+use Cego\RequestInsurance\HttpResponse;
+use Cego\RequestInsurance\Exceptions\MethodNotAllowedForRequestInsurance;
 
 abstract class HttpRequest
 {
@@ -19,17 +20,18 @@ abstract class HttpRequest
      *
      * @return static
      */
-    public static function create()
+    public static function create(): self
     {
         $class = app()->get(HttpRequest::class);
 
         /** @var HttpRequest $instance */
-        $instance = (new $class)
-            ->setOption(CURLOPT_USERAGENT, 'RequestInsurance CurlRequest')
+        $instance = (new $class);
+
+        $instance->setOption(CURLOPT_USERAGENT, 'RequestInsurance CurlRequest')
             ->setOption(CURLOPT_RETURNTRANSFER, true)
             ->setOption(CURLOPT_FOLLOWLOCATION, true)
-            ->setOption(CURLOPT_TCP_KEEPALIVE, config('request-insurance.keepAlive', true))
-            ->setOption(CURLOPT_TIMEOUT, config('request-insurance.timeoutInSeconds', 5));
+            ->setOption(CURLOPT_TCP_KEEPALIVE, Config::get('request-insurance.keepAlive', true))
+            ->setTimeoutMs(Config::get('request-insurance.timeoutInSeconds', 5) * 1000);
 
         return $instance;
     }
@@ -47,20 +49,44 @@ abstract class HttpRequest
     }
 
     /**
+     * Sets the timeout in ms
+     *
+     * @param int $timeout
+     *
+     * @return $this
+     */
+    public function setTimeoutMs(int $timeout)
+    {
+        if ($timeout < 1000) {
+            /**
+             * There is a bug with the CURLOPT_TIMEOUT_MS variant, if the timeout is less than a second.
+             * To get around this, we need to set the CURLOPT_NOSIGNAL to 1.
+             *
+             * See the link below for an explanation.
+             *
+             * @url https://www.php.net/manual/en/function.curl-setopt.php#104597
+             */
+            $this->setOption(CURLOPT_NOSIGNAL, 1);
+        }
+
+        return $this->setOption(CURLOPT_TIMEOUT_MS, $timeout);
+    }
+
+    /**
      * Sets the method of the request
      *
      * @param string $method
      *
-     * @return $this
-     *
      * @throws MethodNotAllowedForRequestInsurance
+     *
+     * @return $this
      */
     public function setMethod($method)
     {
         $method = mb_strtoupper($method);
 
         $allowedMethods = [
-            'GET', 'HEAD', 'POST', 'DELETE', 'PUT', 'PATCH'
+            'GET', 'HEAD', 'POST', 'DELETE', 'PUT', 'PATCH',
         ];
 
         if ( ! in_array($method, $allowedMethods)) {

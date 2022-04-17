@@ -1,10 +1,13 @@
 <?php
 
-namespace App;
+namespace Cego\RequestInsurance\Models;
 
 use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Cego\RequestInsurance\Factories\RequestInsuranceLogFactory;
 
 /**
  * Class RequestInsuranceLog
@@ -16,14 +19,27 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property Carbon $created_at
  * @property Carbon $updated_at
  */
-class RequestInsuranceLog extends Model
+class RequestInsuranceLog extends SaveRetryingModel
 {
+    use HasFactory;
+
     /**
      * Indicates if all mass assignment is enabled.
      *
      * @var bool
      */
     protected static $unguarded = true;
+
+    /**
+     * Get the table associated with the model.
+     *
+     * @return string
+     */
+    public function getTable(): string
+    {
+        // Use the one defined in the config, or the whatever is default
+        return Config::get('request-insurance.table_logs') ?? parent::getTable();
+    }
 
     /**
      * Perform any actions required after the model boots.
@@ -48,6 +64,16 @@ class RequestInsuranceLog extends Model
      */
     public function parent()
     {
-        return $this->belongsTo(RequestInsurance::class, 'request_insurance_id');
+        return $this->belongsTo(get_class(resolve(RequestInsurance::class)), 'request_insurance_id');
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     *
+     * @return Factory
+     */
+    protected static function newFactory()
+    {
+        return new RequestInsuranceLogFactory();
     }
 }
