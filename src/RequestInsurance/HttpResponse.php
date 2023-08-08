@@ -1,92 +1,66 @@
 <?php
 
-namespace Nbj\RequestInsurance;
+namespace Cego\RequestInsurance;
 
+use GuzzleHttp\Psr7\Response;
 use Illuminate\Support\Collection;
-use Nbj\RequestInsurance\Contracts\HttpRequest;
-use Nbj\RequestInsurance\Contracts\ContainsResponseHeaders;
+use Illuminate\Support\Facades\Log;
+use GuzzleHttp\Exception\ConnectException;
 
 class HttpResponse
 {
-    /**
-     * Holds the request associated with the response
-     *
-     * @var HttpResponse $request
-     */
-    protected $request = null;
+    protected Response $response;
+    protected ConnectException $connectException;
 
     /**
-     * Holds the body of the response
-     *
-     * @var bool|string $body
+     * @param Response|ConnectException $response
      */
-    protected $body;
-
-    /**
-     * Holds the error message of the response if present
-     *
-     * @var string $errorMessage
-     */
-    protected $errorMessage;
-
-    /**
-     * Holds a collection of response information
-     *
-     * @var \Illuminate\Support\Collection $info
-     */
-    protected $info;
-
-    /**
-     * Holds all the headers of the response if set
-     *
-     * @var \Illuminate\Support\Collection $responseHeaders
-     */
-    protected $responseHeaders;
-
-    /**
-     * Protected constructor to force use of named constructor
-     */
-    protected function __construct()
+    public function __construct($response)
     {
-        $this->info = new Collection;
-        $this->responseHeaders = new Collection;
+        if ($response instanceof ConnectException) {
+            $this->connectException = $response;
+        } elseif ($response !== null) {
+            $this->response = $response;
+        }
     }
 
     /**
-     * Named constructor for creating a new response instance
+     * Returns true if the request is in an inconsistent state,
+     * caused by any reason which left us without any real response.
      *
-     * @param HttpRequest $request
-     *
-     * @return HttpResponse
+     * @return bool
      */
-    public static function create(HttpRequest $request)
+    public function isInconsistent(): bool
     {
-        return (new static)
-            ->setRequest($request);
+        return ! isset($this->response);
     }
 
     /**
-     * Sets the request that produced the response
+     * Returns true when the request timed out
      *
-     * @param HttpRequest $request
-     *
-     * @return $this
+     * @return bool
      */
-    public function setRequest(HttpRequest $request)
+    public function isTimedOut(): bool
     {
-        $this->request = $request;
+        return isset($this->connectException);
+    }
 
-        $this->body = $request->getResponse();
-        $this->errorMessage = $request->getError();
-        $this->info = collect($request->getInfo());
-
-        if ($request instanceof ContainsResponseHeaders) {
-            $this->responseHeaders = collect($request->getResponseHeaders());
+    /**
+     * Logs the reason for the inconsistent state if the response is in an inconsistent state
+     *
+     * @return void
+     */
+    public function logInconsistentReason(): void
+    {
+        if ( ! $this->isInconsistent()) {
+            return;
         }
 
-        $request->close();
-
-        return $this;
+        if ($this->isTimedOut()) {
+            Log::error($this->connectException);
+        } else {
+            Log::error('No response object nor connect exception received for request');
+        }
     }
 
     /**
@@ -96,7 +70,11 @@ class HttpResponse
      */
     public function wasSuccessful()
     {
-        return $this->getCode() == 200;
+        if ($this->isInconsistent()) {
+            return false;
+        }
+
+        return $this->isResponseCodeBetween(200, 299);
     }
 
     /**
@@ -116,7 +94,7 @@ class HttpResponse
      */
     public function isNotRetryable()
     {
-        return $this->getCode() >= 400 && $this->getCode() < 500;
+        return $this->isResponseCodeBetween(400, 499);
     }
 
     /**
@@ -134,27 +112,47 @@ class HttpResponse
      *
      * @return int
      */
-    public function getCode()
+    public function getCode(): int
     {
-        return (int) $this->info->get('http_code');
+        if ($this->isTimedOut()) {
+            return 0;
+        }
+
+        if ($this->isInconsistent()) {
+            return -1;
+        }
+
+        return $this->response->getStatusCode();
     }
 
     /**
      * Gets the body of the response
      *
-     * @return string
+     * @return string|null
      */
-    public function getBody()
+    public function getBody(): ?string
     {
-        return (string) $this->body;
+        if ($this->isTimedOut()) {
+            return '<REQUEST_TIMED_OUT : THIS MESSAGE WAS ADDED BY REQUEST INSURANCE>';
+        }
+
+        if ($this->isInconsistent()) {
+            return '<REQUEST_INCONSISTENT : THIS MESSAGE WAS ADDED BY REQUEST INSURANCE>';
+        }
+
+        return $this->response->getBody()->getContents();
     }
 
     /**
      * @return Collection
      */
-    public function getHeaders()
+    public function getHeaders(): Collection
     {
-        return $this->responseHeaders;
+        if ($this->isInconsistent()) {
+            return new Collection();
+        }
+
+        return collect($this->response->getHeaders());
     }
 
     /**
@@ -162,8 +160,57 @@ class HttpResponse
      *
      * @return float
      */
-    public function getExecutionTime()
+    public function getExecutionTime(): float
     {
-        return (float) $this->info->get('total_time');
+        if ($this->isInconsistent()) {
+            return -1;
+        }
+
+        return $this->response->getHandlerContext()['total_time'] ?? 0;
+    }
+
+    /**
+     * Returns true if the response was a client error
+     *
+     * Code range [400;499]
+     *
+     * @return bool
+     */
+    public function isClientError(): bool
+    {
+        if ($this->isInconsistent()) {
+            return false;
+        }
+
+        return $this->isResponseCodeBetween(400, 499);
+    }
+
+    /**
+     * Returns true if the response was a server error
+     *
+     * Code range [500;599]
+     *
+     * @return bool
+     */
+    public function isServerError(): bool
+    {
+        if ($this->isInconsistent()) {
+            return false;
+        }
+
+        return $this->isResponseCodeBetween(500, 599);
+    }
+
+    /**
+     * Checks if the response code is between a given range INCLUSIVE in both ends
+     *
+     * @param int $start
+     * @param int $end
+     *
+     * @return bool
+     */
+    protected function isResponseCodeBetween(int $start, int $end): bool
+    {
+        return $start <= $this->getCode() && $this->getCode() <= $end;
     }
 }

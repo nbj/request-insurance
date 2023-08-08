@@ -1,12 +1,21 @@
 <?php
 
-namespace Nbj\RequestInsurance\Contracts;
+namespace Cego\RequestInsurance\Contracts;
 
-use Nbj\RequestInsurance\HttpResponse;
-use Nbj\RequestInsurance\Exceptions\MethodNotAllowedForRequestInsurance;
+use JsonException;
+use Illuminate\Support\Facades\Config;
+use Cego\RequestInsurance\HttpResponse;
+use Cego\RequestInsurance\Exceptions\MethodNotAllowedForRequestInsurance;
 
 abstract class HttpRequest
 {
+    protected string $userAgent = 'RequestInsurance';
+    protected array $headers = [];
+    protected int $timeout;
+    protected string $url;
+    protected string $method;
+    protected string $payload;
+
     /**
      * Protected constructor to force use of named constructor
      */
@@ -19,17 +28,14 @@ abstract class HttpRequest
      *
      * @return static
      */
-    public static function create()
+    public static function create(): self
     {
         $class = app()->get(HttpRequest::class);
 
         /** @var HttpRequest $instance */
-        $instance = (new $class)
-            ->setOption(CURLOPT_USERAGENT, 'RequestInsurance CurlRequest')
-            ->setOption(CURLOPT_RETURNTRANSFER, true)
-            ->setOption(CURLOPT_FOLLOWLOCATION, true)
-            ->setOption(CURLOPT_TCP_KEEPALIVE, config('request-insurance.keepAlive', true))
-            ->setOption(CURLOPT_TIMEOUT, config('request-insurance.timeoutInSeconds', 5));
+        $instance = (new $class());
+
+        $instance->timeout = Config::get('request-insurance.timeoutInSeconds', 5);
 
         return $instance;
     }
@@ -43,7 +49,23 @@ abstract class HttpRequest
      */
     public function setUrl($url)
     {
-        return $this->setOption(CURLOPT_URL, $url);
+        $this->url = $url;
+
+        return $this;
+    }
+
+    /**
+     * Sets the timeout in seconds
+     *
+     * @param int $timeout
+     *
+     * @return $this
+     */
+    public function setTimeout(int $timeout)
+    {
+        $this->timeout = $timeout;
+
+        return $this;
     }
 
     /**
@@ -51,23 +73,25 @@ abstract class HttpRequest
      *
      * @param string $method
      *
-     * @return $this
-     *
      * @throws MethodNotAllowedForRequestInsurance
+     *
+     * @return $this
      */
     public function setMethod($method)
     {
         $method = mb_strtoupper($method);
 
         $allowedMethods = [
-            'GET', 'HEAD', 'POST', 'DELETE', 'PUT', 'PATCH'
+            'GET', 'HEAD', 'POST', 'DELETE', 'PUT', 'PATCH',
         ];
 
-        if ( ! in_array($method, $allowedMethods)) {
-            throw new MethodNotAllowedForRequestInsurance;
+        if ( ! in_array($method, $allowedMethods, false)) {
+            throw new MethodNotAllowedForRequestInsurance($method);
         }
 
-        return $this->setOption(CURLOPT_CUSTOMREQUEST, mb_strtoupper($method));
+        $this->method = $method;
+
+        return $this;
     }
 
     /**
@@ -75,25 +99,19 @@ abstract class HttpRequest
      *
      * @param string|array $headers
      *
+     * @throws JsonException
+     *
      * @return $this
      */
     public function setHeaders($headers)
     {
-        // If $headers is already an array we assume it is correct and pass it directly on
-        if (is_array($headers)) {
-            return $this->setOption(CURLOPT_HTTPHEADER, $headers);
+        if ( ! is_array($headers)) {
+            $headers = json_decode($headers, true, 512, JSON_THROW_ON_ERROR);
         }
 
-        // Otherwise it is a string and we assume it is json.
-        // An exception is thrown if we cannot decode the string
-        $headers = collect(json_decode($headers, true, JSON_THROW_ON_ERROR))
-            ->map(function ($value, $header) {
-                return sprintf('%s: %s', $header, $value);
-            })
-            ->flatten()
-            ->toArray();
+        $this->headers = $headers;
 
-        return $this->setOption(CURLOPT_HTTPHEADER, $headers);
+        return $this;
     }
 
     /**
@@ -105,7 +123,9 @@ abstract class HttpRequest
      */
     public function setPayload($payload)
     {
-        return $this->setOption(CURLOPT_POSTFIELDS, $payload);
+        $this->payload = $payload;
+
+        return $this;
     }
 
     /**
@@ -119,47 +139,50 @@ abstract class HttpRequest
     }
 
     /**
-     * Sets an option
-     *
-     * @param int $option
-     * @param mixed $value
-     *
-     * @return $this
-     */
-    abstract public function setOption($option, $value);
-
-    /**
-     * Gets information about the request
-     *
-     * @return mixed
-     */
-    abstract public function getInfo();
-
-    /**
-     * Gets the error number if set
-     *
-     * @return int
-     */
-    abstract public function getErrorNumber();
-
-    /**
-     * Gets the error message if set
-     *
      * @return string
      */
-    abstract public function getError();
+    public function getUserAgent(): string
+    {
+        return $this->userAgent;
+    }
 
     /**
-     * Executes the request
-     *
-     * @return string|bool
+     * @return array
      */
-    abstract public function getResponse();
+    public function getHeaders(): array
+    {
+        return $this->headers;
+    }
 
     /**
-     * Closes the resource
-     *
-     * @return $this
+     * @return int
      */
-    abstract public function close();
+    public function getTimeout(): int
+    {
+        return $this->timeout;
+    }
+
+    /**
+     * @return string
+     */
+    public function getUrl(): string
+    {
+        return $this->url;
+    }
+
+    /**
+     * @return string
+     */
+    public function getMethod(): string
+    {
+        return $this->method;
+    }
+
+    /**
+     * @return string
+     */
+    public function getPayload(): string
+    {
+        return $this->payload;
+    }
 }
